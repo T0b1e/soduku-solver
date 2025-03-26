@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sudoku Solver with Debug Mode & Move History</title>
+  <title>Sudoku Solver with Debug Mode</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" 
     integrity="sha512-Fo3rlrZj/k7ujTTXRNcxMuzTjoYqZr0Q3ZOW3k5F5BvY5t+M3YgM47Xd4n2Xb6blU6du7GL1h8uN7k0aPU6+0g==" 
     crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -77,7 +77,7 @@
       background-color: #ccc;
       cursor: not-allowed;
     }
-    .speed-container, .stat-container, .move-container {
+    .speed-container, .stat-container {
       margin-top: 10px;
       font-size: 16px;
     }
@@ -90,7 +90,6 @@
     #stat-icon.animate {
       transform: scale(1.2);
     }
-    /* Code display panel */
     #code-display {
       background-color: #272822;
       color: #f8f8f2;
@@ -108,11 +107,6 @@
     }
     .current-line {
       background-color: #49483e;
-    }
-    /* Range slider styling */
-    input[type=range] {
-      width: 100%;
-      margin-top: 5px;
     }
   </style>
 </head>
@@ -132,10 +126,6 @@
         <i id="stat-icon" class="fas fa-chart-line"></i>
         <span id="stat-label">Clicks: 0</span>
       </div>
-      <div class="move-container">
-        <label for="move-range">Move: <span id="move-label">0</span></label>
-        <input type="range" id="move-range" min="0" max="0" value="0">
-      </div>
     </div>
     <div class="right-panel">
       <h3 style="text-align: center; color: #333;">Backtracking Debug Code</h3>
@@ -151,9 +141,8 @@
     const debugDelay = 50;
     let clickCount = 0;
     let duplicateCell = null;
-    let moveHistory = [];
     
-    // Debug code snippet (without comments)
+    // Debug code snippet (no comments)
     const debugCodeText = `
 async function solveSudoku(board) {
   if (!solving) return false;
@@ -179,7 +168,6 @@ async function solveSudoku(board) {
   return false;
 }
 `;
-
     function updateDebugCode(lineNumber) {
       const codeContainer = document.getElementById("code-content");
       const lines = debugCodeText.trim().split("\n");
@@ -190,26 +178,22 @@ async function solveSudoku(board) {
       });
       codeContainer.innerHTML = html;
     }
-
     updateDebugCode(1);
-
-    // Modified isValid: sets duplicateCell if a duplicate is found.
+    
+    // isValid: if duplicate found, record its position
     function isValid(board, row, col, num) {
-      // Check row
       for (let i = 0; i < 9; i++) {
         if (board[row][i] === num) {
           duplicateCell = { row: row, col: i };
           return false;
         }
       }
-      // Check column
       for (let i = 0; i < 9; i++) {
         if (board[i][col] === num) {
           duplicateCell = { row: i, col: col };
           return false;
         }
       }
-      // Check sub-box
       const boxRow = Math.floor(row / 3) * 3;
       const boxCol = Math.floor(col / 3) * 3;
       for (let i = 0; i < 3; i++) {
@@ -223,7 +207,7 @@ async function solveSudoku(board) {
       duplicateCell = null;
       return true;
     }
-
+    
     function findEmpty(board) {
       for (let i = 0; i < 9; i++) {
         for (let j = 0; j < 9; j++) {
@@ -234,12 +218,12 @@ async function solveSudoku(board) {
       }
       return null;
     }
-
+    
     function sleep(ms) {
       return new Promise(resolve => setTimeout(resolve, ms));
     }
-
-    // Render the board from a given state
+    
+    // Display board and highlight current/duplicate cells.
     function displayBoard(boardState, highlightRow, highlightCol) {
       const table = document.getElementById("sudoku-board");
       table.innerHTML = "";
@@ -264,28 +248,13 @@ async function solveSudoku(board) {
         table.appendChild(rowElem);
       }
     }
-
-    // Update the board and store its state in moveHistory.
+    
+    // Update board display.
     function updateBoard(boardState, highlightRow, highlightCol) {
       displayBoard(boardState, highlightRow, highlightCol);
-      moveHistory.push(JSON.parse(JSON.stringify(boardState)));
-      updateSlider();
     }
-
-    function updateSlider() {
-      const slider = document.getElementById("move-range");
-      slider.max = moveHistory.length - 1;
-      document.getElementById("move-label").textContent = slider.value;
-    }
-
-    // Event listener for slider to review previous moves.
-    document.getElementById("move-range").addEventListener("input", function() {
-      const index = this.value;
-      document.getElementById("move-label").textContent = index;
-      displayBoard(moveHistory[index], -1, -1);
-    });
-
-    // Backtracking solver with debug instrumentation.
+    
+    // Backtracking solver with debug instrumentation and stop checks.
     async function solveSudoku(board) {
       updateDebugCode(2); await sleep(debugDelay);
       if (!solving) return false;
@@ -298,12 +267,14 @@ async function solveSudoku(board) {
       updateDebugCode(6); await sleep(debugDelay);
       for (let num = 1; num <= 9; num++) {
         updateDebugCode(7); await sleep(debugDelay);
+        if (!solving) return false;
         if (isValid(board, row, col, num)) {
           updateDebugCode(8); await sleep(debugDelay);
           board[row][col] = num;
           updateDebugCode(9); await sleep(debugDelay);
           updateBoard(board, row, col);
           updateDebugCode(10); await sleep(delay);
+          if (!solving) return false;
           updateDebugCode(11); await sleep(debugDelay);
           if (await solveSudoku(board)) {
             updateDebugCode(12); await sleep(debugDelay);
@@ -315,20 +286,18 @@ async function solveSudoku(board) {
           updateBoard(board, row, col);
           updateDebugCode(15); await sleep(debugDelay);
           await sleep(delay);
+          if (!solving) return false;
         } else {
           updateBoard(board, row, col);
           await sleep(delay);
+          if (!solving) return false;
         }
       }
       updateDebugCode(16); await sleep(debugDelay);
       return false;
     }
-
-    // Update board display without highlighting (used for slider view)
-    function resetDisplay() {
-      displayBoard(board, -1, -1);
-    }
-
+    
+    // Generate a new random board.
     function generateRandomGame() {
       for (let i = 0; i < Math.floor(Math.random() * 9 + 12); i++) {
         const row = Math.floor(Math.random() * 9);
@@ -339,8 +308,8 @@ async function solveSudoku(board) {
         }
       }
     }
-
-    // Event listeners for control buttons
+    
+    // Event listeners for control buttons.
     document.getElementById("start-btn").addEventListener("click", async () => {
       solving = true;
       document.getElementById("start-btn").disabled = true;
@@ -348,24 +317,26 @@ async function solveSudoku(board) {
       await solveSudoku(board);
       solving = false;
       document.getElementById("stop-btn").disabled = true;
+      document.getElementById("start-btn").disabled = false;
     });
-
+    
     document.getElementById("stop-btn").addEventListener("click", () => {
       solving = false;
       document.getElementById("stop-btn").disabled = true;
       document.getElementById("start-btn").disabled = false;
+      console.log("Solver stopped.");
     });
-
+    
     document.getElementById("slow-btn").addEventListener("click", () => {
       delay = Math.min(1000, delay + 100);
       document.getElementById("speed-label").textContent = "Speed: " + delay + " ms";
     });
-
+    
     document.getElementById("fast-forward-btn").addEventListener("click", () => {
       delay = Math.max(50, delay - 50);
       document.getElementById("speed-label").textContent = "Speed: " + delay + " ms";
     });
-
+    
     document.getElementById("stat-icon").addEventListener("click", () => {
       clickCount++;
       document.getElementById("stat-label").textContent = "Clicks: " + clickCount;
@@ -374,8 +345,8 @@ async function solveSudoku(board) {
         document.getElementById("stat-icon").classList.remove("animate");
       }, 300);
     });
-
-    // Reset / New Map button: clears the board and starts a new game.
+    
+    // Reset/New Map: Clear board and generate a new game.
     document.getElementById("reset-btn").addEventListener("click", () => {
       solving = false;
       duplicateCell = null;
@@ -384,12 +355,13 @@ async function solveSudoku(board) {
           board[i][j] = 0;
         }
       }
-      moveHistory = [];
       generateRandomGame();
       updateBoard(board, -1, -1);
+      document.getElementById("start-btn").disabled = false;
+      document.getElementById("stop-btn").disabled = true;
     });
-
-    // Initialize board
+    
+    // Initialize board.
     generateRandomGame();
     updateBoard(board, -1, -1);
   </script>
