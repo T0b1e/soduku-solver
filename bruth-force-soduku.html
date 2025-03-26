@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sudoku Solver with Debug Mode & Move History</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" 
+    integrity="sha512-Fo3rlrZj/k7ujTTXRNcxMuzTjoYqZr0Q3ZOW3k5F5BvY5t+M3YgM47Xd4n2Xb6blU6du7GL1h8uN7k0aPU6+0g==" 
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: #f4f4f9;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .left-panel {
+      flex: 1;
+      max-width: 500px;
+    }
+    .right-panel {
+      flex: 1;
+      max-width: 600px;
+    }
+    table {
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-size: 18px;
+      text-align: center;
+      background-color: #fff;
+      border-radius: 5px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      transition: transform 0.3s ease;
+    }
+    td {
+      width: 40px;
+      height: 40px;
+      border: 1px solid #555;
+      vertical-align: middle;
+      transition: background-color 0.3s ease;
+    }
+    .bold {
+      border-width: 2px;
+    }
+    .highlight {
+      background-color: #fffa90;
+    }
+    .highlight-solved {
+      background-color: #90ee90;
+    }
+    .duplicate {
+      background-color: #ffcccc;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      margin: 5px;
+      transition: background-color 0.3s ease;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    .speed-container, .stat-container, .move-container {
+      margin-top: 10px;
+      font-size: 16px;
+    }
+    #stat-icon {
+      font-size: 40px;
+      cursor: pointer;
+      transition: transform 0.3s ease;
+      margin-right: 10px;
+    }
+    #stat-icon.animate {
+      transform: scale(1.2);
+    }
+    /* Code display panel */
+    #code-display {
+      background-color: #272822;
+      color: #f8f8f2;
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      font-family: "Courier New", Courier, monospace;
+      white-space: pre-wrap;
+      overflow: auto;
+      max-height: 600px;
+    }
+    #code-display span {
+      display: block;
+      padding: 3px 8px;
+    }
+    .current-line {
+      background-color: #49483e;
+    }
+    /* Range slider styling */
+    input[type=range] {
+      width: 100%;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="left-panel">
+      <table id="sudoku-board"></table>
+      <button id="start-btn">Start Solving</button>
+      <button id="stop-btn" disabled>Stop</button>
+      <button id="slow-btn">Slow</button>
+      <button id="fast-forward-btn">Fast Forward</button>
+      <button id="reset-btn">New Map</button>
+      <div class="speed-container">
+        <span id="speed-label">Speed: 200 ms</span>
+      </div>
+      <div class="stat-container">
+        <i id="stat-icon" class="fas fa-chart-line"></i>
+        <span id="stat-label">Clicks: 0</span>
+      </div>
+      <div class="move-container">
+        <label for="move-range">Move: <span id="move-label">0</span></label>
+        <input type="range" id="move-range" min="0" max="0" value="0">
+      </div>
+    </div>
+    <div class="right-panel">
+      <h3 style="text-align: center; color: #333;">Backtracking Debug Code</h3>
+      <pre id="code-display"><code id="code-content"></code></pre>
+    </div>
+  </div>
+  
+  <script>
+    // Global variables
+    const board = Array.from({ length: 9 }, () => Array(9).fill(0));
+    let solving = false;
+    let delay = 200;
+    const debugDelay = 50;
+    let clickCount = 0;
+    let duplicateCell = null;
+    let moveHistory = [];
+    
+    // Debug code snippet (without comments)
+    const debugCodeText = `
+async function solveSudoku(board) {
+  if (!solving) return false;
+  const empty = findEmpty(board);
+  if (!empty) return true;
+  const [row, col] = empty;
+  for (let num = 1; num <= 9; num++) {
+    if (isValid(board, row, col, num)) {
+      board[row][col] = num;
+      updateBoard(board, row, col);
+      await sleep(delay);
+      if (await solveSudoku(board)) {
+        return true;
+      }
+      board[row][col] = 0;
+      updateBoard(board, row, col);
+      await sleep(delay);
+    } else {
+      updateBoard(board, row, col);
+      await sleep(delay);
+    }
+  }
+  return false;
+}
+`;
+
+    function updateDebugCode(lineNumber) {
+      const codeContainer = document.getElementById("code-content");
+      const lines = debugCodeText.trim().split("\n");
+      let html = "";
+      lines.forEach((line, index) => {
+        const current = (index + 1) === lineNumber;
+        html += `<span class="${current ? 'current-line' : ''}">${line}</span>\n`;
+      });
+      codeContainer.innerHTML = html;
+    }
+
+    updateDebugCode(1);
+
+    // Modified isValid: sets duplicateCell if a duplicate is found.
+    function isValid(board, row, col, num) {
+      // Check row
+      for (let i = 0; i < 9; i++) {
+        if (board[row][i] === num) {
+          duplicateCell = { row: row, col: i };
+          return false;
+        }
+      }
+      // Check column
+      for (let i = 0; i < 9; i++) {
+        if (board[i][col] === num) {
+          duplicateCell = { row: i, col: col };
+          return false;
+        }
+      }
+      // Check sub-box
+      const boxRow = Math.floor(row / 3) * 3;
+      const boxCol = Math.floor(col / 3) * 3;
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+          if (board[boxRow + i][boxCol + j] === num) {
+            duplicateCell = { row: boxRow + i, col: boxCol + j };
+            return false;
+          }
+        }
+      }
+      duplicateCell = null;
+      return true;
+    }
+
+    function findEmpty(board) {
+      for (let i = 0; i < 9; i++) {
+        for (let j = 0; j < 9; j++) {
+          if (board[i][j] === 0) {
+            return [i, j];
+          }
+        }
+      }
+      return null;
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // Render the board from a given state
+    function displayBoard(boardState, highlightRow, highlightCol) {
+      const table = document.getElementById("sudoku-board");
+      table.innerHTML = "";
+      for (let i = 0; i < 9; i++) {
+        const rowElem = document.createElement("tr");
+        for (let j = 0; j < 9; j++) {
+          const cell = document.createElement("td");
+          cell.textContent = boardState[i][j] === 0 ? "" : boardState[i][j];
+          if (i === highlightRow && j === highlightCol) {
+            cell.classList.add("highlight");
+          }
+          if (duplicateCell && duplicateCell.row === i && duplicateCell.col === j) {
+            cell.classList.add("duplicate");
+          }
+          if (!findEmpty(boardState)) {
+            cell.classList.add("highlight-solved");
+          }
+          if (i % 3 === 0) cell.classList.add("bold");
+          if (j % 3 === 0) cell.classList.add("bold");
+          rowElem.appendChild(cell);
+        }
+        table.appendChild(rowElem);
+      }
+    }
+
+    // Update the board and store its state in moveHistory.
+    function updateBoard(boardState, highlightRow, highlightCol) {
+      displayBoard(boardState, highlightRow, highlightCol);
+      moveHistory.push(JSON.parse(JSON.stringify(boardState)));
+      updateSlider();
+    }
+
+    function updateSlider() {
+      const slider = document.getElementById("move-range");
+      slider.max = moveHistory.length - 1;
+      document.getElementById("move-label").textContent = slider.value;
+    }
+
+    // Event listener for slider to review previous moves.
+    document.getElementById("move-range").addEventListener("input", function() {
+      const index = this.value;
+      document.getElementById("move-label").textContent = index;
+      displayBoard(moveHistory[index], -1, -1);
+    });
+
+    // Backtracking solver with debug instrumentation.
+    async function solveSudoku(board) {
+      updateDebugCode(2); await sleep(debugDelay);
+      if (!solving) return false;
+      updateDebugCode(3); await sleep(debugDelay);
+      const empty = findEmpty(board);
+      updateDebugCode(4); await sleep(debugDelay);
+      if (!empty) return true;
+      updateDebugCode(5); await sleep(debugDelay);
+      const [row, col] = empty;
+      updateDebugCode(6); await sleep(debugDelay);
+      for (let num = 1; num <= 9; num++) {
+        updateDebugCode(7); await sleep(debugDelay);
+        if (isValid(board, row, col, num)) {
+          updateDebugCode(8); await sleep(debugDelay);
+          board[row][col] = num;
+          updateDebugCode(9); await sleep(debugDelay);
+          updateBoard(board, row, col);
+          updateDebugCode(10); await sleep(delay);
+          updateDebugCode(11); await sleep(debugDelay);
+          if (await solveSudoku(board)) {
+            updateDebugCode(12); await sleep(debugDelay);
+            return true;
+          }
+          updateDebugCode(13); await sleep(debugDelay);
+          board[row][col] = 0;
+          updateDebugCode(14); await sleep(debugDelay);
+          updateBoard(board, row, col);
+          updateDebugCode(15); await sleep(debugDelay);
+          await sleep(delay);
+        } else {
+          updateBoard(board, row, col);
+          await sleep(delay);
+        }
+      }
+      updateDebugCode(16); await sleep(debugDelay);
+      return false;
+    }
+
+    // Update board display without highlighting (used for slider view)
+    function resetDisplay() {
+      displayBoard(board, -1, -1);
+    }
+
+    function generateRandomGame() {
+      for (let i = 0; i < Math.floor(Math.random() * 9 + 12); i++) {
+        const row = Math.floor(Math.random() * 9);
+        const col = Math.floor(Math.random() * 9);
+        const num = Math.floor(Math.random() * 9 + 1);
+        if (isValid(board, row, col, num)) {
+          board[row][col] = num;
+        }
+      }
+    }
+
+    // Event listeners for control buttons
+    document.getElementById("start-btn").addEventListener("click", async () => {
+      solving = true;
+      document.getElementById("start-btn").disabled = true;
+      document.getElementById("stop-btn").disabled = false;
+      await solveSudoku(board);
+      solving = false;
+      document.getElementById("stop-btn").disabled = true;
+    });
+
+    document.getElementById("stop-btn").addEventListener("click", () => {
+      solving = false;
+      document.getElementById("stop-btn").disabled = true;
+      document.getElementById("start-btn").disabled = false;
+    });
+
+    document.getElementById("slow-btn").addEventListener("click", () => {
+      delay = Math.min(1000, delay + 100);
+      document.getElementById("speed-label").textContent = "Speed: " + delay + " ms";
+    });
+
+    document.getElementById("fast-forward-btn").addEventListener("click", () => {
+      delay = Math.max(50, delay - 50);
+      document.getElementById("speed-label").textContent = "Speed: " + delay + " ms";
+    });
+
+    document.getElementById("stat-icon").addEventListener("click", () => {
+      clickCount++;
+      document.getElementById("stat-label").textContent = "Clicks: " + clickCount;
+      document.getElementById("stat-icon").classList.add("animate");
+      setTimeout(() => {
+        document.getElementById("stat-icon").classList.remove("animate");
+      }, 300);
+    });
+
+    // Reset / New Map button: clears the board and starts a new game.
+    document.getElementById("reset-btn").addEventListener("click", () => {
+      solving = false;
+      duplicateCell = null;
+      for (let i = 0; i < 9; i++) {
+        for (let j = 0; j < 9; j++) {
+          board[i][j] = 0;
+        }
+      }
+      moveHistory = [];
+      generateRandomGame();
+      updateBoard(board, -1, -1);
+    });
+
+    // Initialize board
+    generateRandomGame();
+    updateBoard(board, -1, -1);
+  </script>
+</body>
+</html>
